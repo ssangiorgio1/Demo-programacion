@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Compra de Entradas - CineApp</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<h1>Comprar Entrada</h1>
+
+<form id="entradaForm">
+    <label for="nombre">Nombre</label>
+    <input type="text" id="nombre" required>
+
+    <label for="email">Email</label>
+    <input type="email" id="email" required>
+
+    <label for="cineId">Cine</label>
+    <select id="cineId" required></select>
+
+    <label for="peliculaId">Película</label>
+    <select id="peliculaId" required></select>
+
+    <label for="funcionId">Función</label>
+    <select id="funcionId" required></select>
+
+    <label for="asiento">Asiento</label>
+    <select id="asiento" required></select>
+
+    <label for="precio">Precio</label>
+    <input type="text" id="precio" readonly>
+
+    <button type="submit">Confirmar Compra</button>
+</form>
+
+<h2>Ventas Realizadas</h2>
+<button onclick="cargarVentas()">Mostrar Compras</button>
+<table id="tablaVentas" style="display:none;">
+    <thead>
+    <tr>
+        <th>Cliente</th>
+        <th>Email</th>
+        <th>Cine</th>
+        <th>Película</th>
+        <th>Horario</th>
+        <th>Asiento</th>
+        <th>Precio</th>
+        <th>Fecha</th>
+    </tr>
+    </thead>
+    <tbody id="ventasBody"></tbody>
+</table>
+
+<script>
+    const BASE_URL = "http://localhost:9000";
+
+    async function cargarCines() {
+        const res = await fetch(`${BASE_URL}/api/cines`);
+        const cines = await res.json();
+        const select = document.getElementById('cineId');
+        select.innerHTML = '<option value="">Seleccione un cine</option>';
+        cines.forEach(c => {
+            const opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.nombre;
+            select.appendChild(opt);
+        });
+    }
+
+    async function cargarPeliculas(cineId) {
+        const res = await fetch(`${BASE_URL}/api/peliculas`);
+        const peliculas = await res.json();
+        const select = document.getElementById('peliculaId');
+        select.innerHTML = '<option value="">Seleccione una película</option>';
+        peliculas
+            .filter(p => p.cine.id == cineId)
+            .forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.titulo;
+                select.appendChild(opt);
+            });
+    }
+
+    async function cargarFunciones(cineId, peliculaId) {
+        const res = await fetch(`${BASE_URL}/api/funciones?cineId=${cineId}&peliculaId=${peliculaId}`);
+        const funciones = await res.json();
+        const select = document.getElementById('funcionId');
+        select.innerHTML = '<option value="">Seleccione una función</option>';
+        funciones.forEach(f => {
+            const opt = document.createElement('option');
+            opt.value = f.id;
+            opt.textContent = `${f.horario}`;
+            select.appendChild(opt);
+        });
+    }
+
+    async function cargarAsientos(funcionId) {
+        const res = await fetch(`${BASE_URL}/api/entradas?funcionId=${funcionId}`);
+        const asientos = await res.json();
+        const select = document.getElementById('asiento');
+        select.innerHTML = '<option value="">Seleccione un asiento</option>';
+        asientos.forEach(a => {
+            const opt = document.createElement('option');
+            opt.value = a.asiento;
+            opt.textContent = `${a.asiento} - $${a.precio}`;
+            opt.dataset.precio = a.precio;
+            select.appendChild(opt);
+        });
+    }
+
+    document.getElementById('cineId').addEventListener('change', () => {
+        const cineId = document.getElementById('cineId').value;
+        cargarPeliculas(cineId);
+        document.getElementById('peliculaId').innerHTML = '';
+        document.getElementById('funcionId').innerHTML = '';
+        document.getElementById('asiento').innerHTML = '';
+        document.getElementById('precio').value = '';
+    });
+
+    document.getElementById('peliculaId').addEventListener('change', () => {
+        const cineId = document.getElementById('cineId').value;
+        const peliculaId = document.getElementById('peliculaId').value;
+        cargarFunciones(cineId, peliculaId);
+        document.getElementById('funcionId').innerHTML = '';
+        document.getElementById('asiento').innerHTML = '';
+        document.getElementById('precio').value = '';
+    });
+
+    document.getElementById('funcionId').addEventListener('change', () => {
+        const funcionId = document.getElementById('funcionId').value;
+        cargarAsientos(funcionId);
+        document.getElementById('precio').value = '';
+    });
+
+    document.getElementById('asiento').addEventListener('change', () => {
+        const selected = document.querySelector('#asiento option:checked');
+        document.getElementById('precio').value = selected?.dataset.precio || '';
+    });
+
+    document.getElementById('entradaForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const data = {
+            nombre: document.getElementById('nombre').value,
+            email: document.getElementById('email').value,
+            funcionId: parseInt(document.getElementById('funcionId').value),
+            asiento: document.getElementById('asiento').value
+        };
+
+        const res = await fetch(`${BASE_URL}/api/compras`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+
+        const text = await res.text();
+        if (res.ok) {
+            alert(text);
+            e.target.reset();
+            cargarAsientos(data.funcionId);
+            cargarVentas();
+        } else {
+            alert("Error: " + text);
+        }
+    });
+
+    async function cargarVentas() {
+        const res = await fetch(`${BASE_URL}/api/ventas`);
+        const ventas = await res.json();
+        const tabla = document.getElementById('tablaVentas');
+        const cuerpo = document.getElementById('ventasBody');
+        cuerpo.innerHTML = '';
+
+        if (ventas.length > 0) {
+            tabla.style.display = 'table';
+            ventas.forEach(v => {
+                const fila = document.createElement('tr');
+                fila.innerHTML = `
+                    <td>${v.clienteNombre}</td>
+                    <td>${v.clienteEmail}</td>
+                    <td>${v.cine}</td>
+                    <td>${v.pelicula}</td>
+                    <td>${v.horario}</td>
+                    <td>${v.asiento}</td>
+                    <td>$${v.precio}</td>
+                    <td>${v.fechaCompra}</td>
+                `;
+                cuerpo.appendChild(fila);
+            });
+        } else {
+            tabla.style.display = 'none';
+            alert('No hay ventas registradas.');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        cargarCines();
+
+    });
+</script>
+
+</body>
+</html>
